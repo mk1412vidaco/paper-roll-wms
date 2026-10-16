@@ -3,23 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kho Điện Tử Cuộn Giấy - Quy Trình Sản Xuất</title>
+  <title>Kho Điện Tử Cuộn Giấy - Quản Lý & In Tem QR</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Thư viện quét mã QR bằng Camera -->
   <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- Thư viện tạo mã QR sắc nét để in ấn -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    /* CSS chuyên dụng khi bấm lệnh In (Ctrl + P) */
+    @media print {
+      body {
+        background: #ffffff !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      #print-section {
+        display: block !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .qr-label-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        border: 2px solid #000 !important;
+      }
+    }
+  </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen p-3 md:p-6">
 
-  <div class="max-w-7xl mx-auto space-y-6">
+  <!-- ================= PHẦN GIAO DIỆN QUẢN LÝ KHO (ẨN KHI IN) ================= -->
+  <div class="max-w-7xl mx-auto space-y-6 no-print">
     <!-- Header -->
     <div class="bg-white p-5 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">📦 Kho Điện Tử Cuộn Giấy (QR WMS)</h1>
-        <p class="text-sm text-slate-500">Quy trình: Nhập kho lần đầu ➔ Xuất sản xuất (Xóa vị trí) ➔ Hoàn kho vị trí QR mới</p>
+        <p class="text-sm text-slate-500">Quản lý vị trí 3 bước & Tạo/In tem mã QR hàng loạt</p>
       </div>
-      <button onclick="resetDemoData()" class="px-4 py-2 text-xs bg-slate-200 hover:bg-slate-300 rounded-lg font-semibold transition">
-        Khôi phục dữ liệu mẫu
-      </button>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="scrollToPrintCenter('LOCATIONS')" class="px-4 py-2 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold transition shadow-sm">
+          🖨️ In QR Hàng Loạt Vị Trí Kho
+        </button>
+        <button onclick="scrollToPrintCenter('ROLLS')" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold transition shadow-sm">
+          🏷️ In QR Hàng Loạt Cuộn Giấy
+        </button>
+        <button onclick="resetDemoData()" class="px-3 py-2 text-xs bg-slate-200 hover:bg-slate-300 rounded-lg font-semibold transition">
+          Khôi phục mẫu
+        </button>
+      </div>
     </div>
 
     <!-- Thống kê trạng thái -->
@@ -81,7 +116,7 @@
           </button>
         </div>
 
-        <!-- Khung Camera Quét QR (Dùng chung cho cả 3 tab) -->
+        <!-- Khung Camera Quét QR -->
         <div id="qr-scanner-box" class="hidden mb-4 p-3 bg-slate-900 rounded-lg text-white">
           <div class="flex justify-between items-center mb-2">
             <span id="qr-scan-label" class="text-xs font-semibold text-emerald-400">Đang mở camera quét QR...</span>
@@ -98,7 +133,7 @@
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">MÃ CUỘN (*)</label>
             <div class="flex gap-2">
-              <input type="text" id="in-rollId" required placeholder="VD: CG-2026-006" class="w-full px-3 py-2 border rounded-lg text-sm uppercase">
+              <input type="text" id="in-rollId" required placeholder="VD: CG-2026-005" class="w-full px-3 py-2 border rounded-lg text-sm uppercase">
               <button type="button" onclick="startQrScanner('in-rollId')" class="px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold shrink-0">📷 Quét</button>
             </div>
           </div>
@@ -134,7 +169,7 @@
           </button>
         </form>
 
-        <!-- FORM 2: XUẤT KHO SẢN XUẤT (XÓA VỊ TRÍ CŨ) -->
+        <!-- FORM 2: XUẤT KHO SẢN XUẤT -->
         <form id="form-ISSUE" onsubmit="handleIssue(event)" class="space-y-3 hidden">
           <div class="p-3 bg-amber-50 text-amber-900 rounded-lg text-xs">
             📌 <b>Tác vụ 2:</b> Đưa cuộn giấy ra máy chạy. Hệ thống sẽ <b>xóa Mã vị trí cũ</b> để giải phóng ô trong kho.
@@ -151,7 +186,7 @@
           </button>
         </form>
 
-        <!-- FORM 3: NHẬP LẠI KHO SAU SẢN XUẤT (GÁN QR VỊ TRÍ MỚI) -->
+        <!-- FORM 3: HOÀN KHO SAU SẢN XUẤT -->
         <form id="form-RETURN" onsubmit="handleReturn(event)" class="space-y-3 hidden">
           <div class="p-3 bg-emerald-50 text-emerald-900 rounded-lg text-xs">
             📌 <b>Tác vụ 3:</b> Cuộn giấy chạy xong còn dư ➔ Quét <b>Mã vị trí QR mới</b> và cập nhật trọng lượng còn lại.
@@ -209,6 +244,70 @@
     </div>
   </div>
 
+  <!-- ================= TRUNG TÂM TẠO & IN TEM MÃ QR HÀNG LOẠT ================= -->
+  <div id="print-section" class="max-w-7xl mx-auto mt-6 bg-white p-5 rounded-xl shadow-sm">
+    
+    <!-- Bộ điều khiển tạo mã QR (Sẽ tự động ẩn khi bấm lệnh In ra giấy) -->
+    <div class="no-print border-b pb-5 mb-5 space-y-4">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">🖨️ Trung Tâm Tạo & In Tem Mã QR Hàng Loạt</h2>
+          <p class="text-xs text-slate-500">Chọn danh sách cần tạo tem bên dưới, sau đó bấm nút <b>"In Tem Ngay"</b> (hỗ trợ khổ A4 và máy in tem nhiệt).</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="generateLocationLabels()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition">
+            📍 1. Tạo QR Tất Cả Vị Trí Kho (12 ô)
+          </button>
+          <button onclick="generateCurrentRollLabels()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition">
+            🏷️ 2. Tạo QR Các Cuộn Đang Có Trong Kho
+          </button>
+          <button onclick="window.print()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow transition">
+            🖨️ IN TEM NGAY (Ctrl + P)
+          </button>
+        </div>
+      </div>
+
+      <!-- Khung tự gõ danh sách mã tùy ý hoặc tạo dãy mã cuộn mới hàng loạt -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">⚡ TẠO NHANH DÃY MÃ CUỘN MỚI ĐỂ DÁN TRƯỚC ( HÀNG LOẠT )</label>
+          <div class="flex flex-wrap sm:flex-nowrap gap-2">
+            <input type="text" id="batch-prefix" value="CG-2026-" placeholder="Tiền tố (VD: CG-2026-)" class="w-full sm:w-40 px-3 py-1.5 border rounded text-xs uppercase font-semibold">
+            <input type="number" id="batch-start" value="10" min="1" placeholder="Từ số" class="w-24 px-3 py-1.5 border rounded text-xs">
+            <input type="number" id="batch-end" value="21" min="1" placeholder="Đến số" class="w-24 px-3 py-1.5 border rounded text-xs">
+            <button onclick="generateBatchSequenceRolls()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-semibold shrink-0">
+              Sinh Dãy Tem
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Ví dụ: Tiền tố <code>CG-2026-</code> từ <code>10</code> đến <code>21</code> sẽ sinh 12 tem từ <b>CG-2026-010</b> đến <b>CG-2026-021</b>.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">✍️ HOẶC NHẬP DANH SÁCH MÃ VỊ TRÍ / MÃ CUỘN TÙY Ý (CÁCH NHAU BỞI DẤU PHẨY)</label>
+          <div class="flex gap-2">
+            <input type="text" id="custom-qr-list" placeholder="VD: KHO-A1, KHO-A2, MAY-SONG-01, CG-2026-099" class="w-full px-3 py-1.5 border rounded text-xs uppercase">
+            <button onclick="generateCustomLabels()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-semibold shrink-0">
+              Tạo Tem
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Dùng khi bạn mở rộng thêm dãy kệ mới hoặc cần in bù các tem bị rách.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Khu vực hiển thị lưới Tem QR (Sẽ được đưa thẳng ra máy in) -->
+    <div>
+      <div class="no-print flex justify-between items-center mb-3">
+        <span id="print-preview-title" class="text-sm font-bold text-slate-700">Xem trước bản in (0 tem):</span>
+        <span class="text-xs text-slate-400">Mẹo: Khi bấm In, hãy bỏ chọn mục "Headers and footers" (Đầu trang và chân trang) trong cài đặt máy in để tem đẹp nhất.</span>
+      </div>
+
+      <!-- Lưới tem: 3 cột trên trang in A4 -->
+      <div id="qr-labels-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
+    </div>
+
+  </div>
+
   <script>
     const LOCATIONS = [
       'A1-01', 'A1-02', 'A1-03', 'A1-04',
@@ -257,7 +356,7 @@
         return;
       }
 
-      rolls.unshift({
+      const newRoll = {
         rollId,
         locationId: locId,
         paperType: document.getElementById('in-type').value.trim(),
@@ -266,12 +365,16 @@
         weightKg: Number(document.getElementById('in-weight').value),
         status: 'Nguyên cuộn',
         lastNote: `Nhập lần đầu vào ${locId}`
-      });
+      };
 
+      rolls.unshift(newRoll);
       saveToStorage();
       document.getElementById('form-INBOUND').reset();
       renderAll();
-      alert(`✅ Đã nhập cuộn ${rollId} vào vị trí ${locId}`);
+
+      // Tự động tạo sẵn tem QR cho cuộn vừa nhập ở dưới khu vực in
+      printSingleRoll(rollId, false);
+      alert(`✅ Đã nhập cuộn ${rollId} vào vị trí ${locId}. Tem QR của cuộn đã được tạo sẵn bên dưới!`);
     }
 
     // TÁC VỤ 2: Xuất kho sản xuất (Xóa vị trí cũ)
@@ -286,7 +389,7 @@
       const r = rolls.find(item => item.rollId === rollId);
       if (!r) return;
       const oldLoc = r.locationId;
-      r.locationId = ''; // Xóa vị trí cũ
+      r.locationId = '';
       r.status = 'Đang sản xuất';
       r.lastNote = `Xuất SX (Đã xóa vị trí cũ: ${oldLoc})`;
       saveToStorage();
@@ -319,7 +422,6 @@
       alert(`🔄 Đã cập nhật cuộn ${rollId} vào vị trí mới ${newLocId}`);
     }
 
-    // Chuyển nhanh từ bảng sang Tab Hoàn kho
     function prepareReturnQuick(rollId) {
       switchTab('RETURN');
       document.getElementById('ret-rollId').value = rollId;
@@ -345,9 +447,10 @@
       currentFilterLoc = 'ALL';
       saveToStorage();
       renderAll();
+      generateLocationLabels();
     }
 
-    // Trình quét QR bằng Camera
+    // ================= LOGIC QUÉT MÃ QR CAMERA =================
     function startQrScanner(targetInputId) {
       const box = document.getElementById('qr-scanner-box');
       box.classList.remove('hidden');
@@ -386,8 +489,129 @@
       }
     }
 
+    // ================= LOGIC TẠO & IN TEM QR HÀNG LOẠT =================
+    function renderQrCards(items, titleText) {
+      const grid = document.getElementById('qr-labels-grid');
+      document.getElementById('print-preview-title').innerText = `${titleText} (${items.length} tem):`;
+      grid.innerHTML = '';
+
+      items.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'qr-label-card border-2 border-slate-800 rounded-xl p-4 flex flex-col items-center text-center bg-white shadow-sm';
+        
+        const qrContainerId = `qr-canvas-${index}`;
+        card.innerHTML = `
+          <div class="w-full border-b border-slate-300 pb-1.5 mb-3 flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
+            <span>${item.badge}</span>
+            <span>WMS QR</span>
+          </div>
+          <div id="${qrContainerId}" class="my-1 p-2 bg-white flex justify-center items-center"></div>
+          <div class="mt-2 font-black text-lg tracking-tight text-slate-900">${item.code}</div>
+          <div class="text-xs font-semibold text-slate-700 mt-0.5">${item.sub1 || ''}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">${item.sub2 || ''}</div>
+        `;
+        grid.appendChild(card);
+
+        // Vẽ mã QR sắc nét bằng thư viện QRCode.js
+        new QRCode(document.getElementById(qrContainerId), {
+          text: item.code,
+          width: 128,
+          height: 128,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      });
+    }
+
+    // 1. Tạo tem hàng loạt cho toàn bộ Mã Vị Trí Kho
+    function generateLocationLabels() {
+      const items = LOCATIONS.map(loc => ({
+        badge: '📍 VỊ TRÍ KHO',
+        code: loc,
+        sub1: `Khu vực dãy ${loc.split('-')[0]}`,
+        sub2: 'Quét khi Nhập / Hoàn kho'
+      }));
+      renderQrCards(items, 'Danh sách Tem QR Vị Trí Kho');
+    }
+
+    // 2. Tạo tem hàng loạt cho các cuộn giấy đang có trong hệ thống
+    function generateCurrentRollLabels() {
+      const items = rolls.map(r => ({
+        badge: '🏷️ CUỘN GIẤY',
+        code: r.rollId,
+        sub1: `${r.paperType} • ${r.gsm} GSM • Khổ ${r.widthCm}cm`,
+        sub2: `Trọng lượng: ${r.weightKg} kg (${r.status})`
+      }));
+      renderQrCards(items, 'Danh sách Tem QR Các Cuộn Giấy Hiện Có');
+    }
+
+    // 3. Tạo 1 tem lẻ cho 1 cuộn cụ thể và cuộn xuống khung in
+    function printSingleRoll(rollId, autoScroll = true) {
+      const r = rolls.find(item => item.rollId === rollId);
+      if (!r) return;
+      renderQrCards([{
+        badge: '🏷️ TEM CUỘN GIẤY',
+        code: r.rollId,
+        sub1: `${r.paperType} • ${r.gsm} GSM • Khổ ${r.widthCm}cm`,
+        sub2: `TL: ${r.weightKg} kg | Vị trí: ${r.locationId || 'Ngoài SX'}`
+      }], `Tem đơn cho cuộn ${r.rollId}`);
+
+      if (autoScroll) {
+        document.getElementById('print-section').scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // 4. Sinh dãy mã cuộn mới hàng loạt theo số thứ tự
+    function generateBatchSequenceRolls() {
+      const prefix = document.getElementById('batch-prefix').value.trim().toUpperCase();
+      const start = parseInt(document.getElementById('batch-start').value, 10);
+      const end = parseInt(document.getElementById('batch-end').value, 10);
+
+      if (isNaN(start) || isNaN(end) || end < start || (end - start) > 100) {
+        alert('Vui lòng nhập khoảng số hợp lệ (tối đa 100 tem mỗi lần in)!');
+        return;
+      }
+
+      const items = [];
+      for (let i = start; i <= end; i++) {
+        const paddedNumber = String(i).padStart(3, '0');
+        const code = `${prefix}${paddedNumber}`;
+        items.push({
+          badge: '🏷️ MÃ CUỘN MỚI',
+          code: code,
+          sub1: 'Loại giấy: ........................',
+          sub2: 'Số KG: ............ | Khổ: ........'
+        });
+      }
+      renderQrCards(items, `Dãy Tem Cuộn Mới (${prefix}${String(start).padStart(3, '0')} ➔ ${prefix}${String(end).padStart(3, '0')})`);
+    }
+
+    // 5. Tạo tem từ danh sách mã gõ tay tùy ý
+    function generateCustomLabels() {
+      const raw = document.getElementById('custom-qr-list').value;
+      const codes = raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+      if (!codes.length) {
+        alert('Hãy nhập ít nhất 1 mã (cách nhau bằng dấu phẩy)!');
+        return;
+      }
+      const items = codes.map(code => ({
+        badge: '🔖 TEM TÙY CHỈNH',
+        code: code,
+        sub1: 'Kho Điện Tử Cuộn Giấy',
+        sub2: 'Quét mã để thao tác'
+      }));
+      renderQrCards(items, 'Danh sách Tem Tùy Chỉnh');
+    }
+
+    function scrollToPrintCenter(type) {
+      if (type === 'LOCATIONS') generateLocationLabels();
+      if (type === 'ROLLS') generateCurrentRollLabels();
+      document.getElementById('print-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ================= RENDER GIAO DIỆN CHÍNH =================
     function renderAll() {
-      // 1. Cập nhật Dropdown vị trí & danh sách cuộn theo trạng thái
       const locOptions = LOCATIONS.map(l => `<option value="${l}">${l}</option>`).join('');
       document.getElementById('in-locId').innerHTML = locOptions;
       document.getElementById('ret-locId').innerHTML = locOptions;
@@ -404,7 +628,7 @@
         : `<option value="">-- Không có cuộn nào đang SX --</option>`;
       fillReturnWeight();
 
-      // 2. Thống kê
+      // Thống kê
       document.getElementById('stat-in-stock').innerText = `${inStockRolls.length} cuộn`;
       document.getElementById('stat-in-prod').innerText = `${inProdRolls.length} cuộn`;
       const totalWeight = rolls.reduce((s, r) => s + r.weightKg, 0);
@@ -412,7 +636,7 @@
       const occupiedLocs = new Set(inStockRolls.map(r => r.locationId));
       document.getElementById('stat-locs').innerText = `${occupiedLocs.size} / ${LOCATIONS.length}`;
 
-      // 3. Sơ đồ kho
+      // Sơ đồ kho
       document.getElementById('warehouse-map').innerHTML = LOCATIONS.map(loc => {
         const rollsHere = inStockRolls.filter(r => r.locationId === loc);
         const count = rollsHere.length;
@@ -430,7 +654,7 @@
         `;
       }).join('');
 
-      // 4. Khu vực đang sản xuất (Đã xóa vị trí)
+      // Khu vực đang sản xuất
       const prodZone = document.getElementById('production-zone');
       prodZone.innerHTML = inProdRolls.length
         ? inProdRolls.map(r => `
@@ -442,7 +666,7 @@
           `).join('')
         : `<span class="text-xs text-slate-400 italic">Hiện không có cuộn nào đang chạy ngoài máy.</span>`;
 
-      // 5. Bảng danh sách
+      // Bảng danh sách
       const kw = document.getElementById('search-input').value.trim().toLowerCase();
       const filtered = rolls.filter(r => {
         const matchLoc = currentFilterLoc === 'ALL' || r.locationId === currentFilterLoc;
@@ -474,17 +698,20 @@
             <td class="p-3 font-semibold">${r.weightKg.toLocaleString('vi-VN')} kg</td>
             <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${badgeClass}">${r.status}</span></td>
             <td class="p-3 text-xs text-slate-500">${r.lastNote || '-'}</td>
-            <td class="p-3 text-right">
+            <td class="p-3 text-right space-x-1 whitespace-nowrap">
+              <button onclick="printSingleRoll('${r.rollId}', true)" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded text-xs font-semibold">🖨️ In QR</button>
               ${!isProd
-                ? `<button onclick="issueRollQuick('${r.rollId}')" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-semibold">🚜 Xuất SX</button>`
-                : `<button onclick="prepareReturnQuick('${r.rollId}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold">🔄 Hoàn kho QR mới</button>`}
+                ? `<button onclick="issueRollQuick('${r.rollId}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-semibold">🚜 Xuất SX</button>`
+                : `<button onclick="prepareReturnQuick('${r.rollId}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold">🔄 Hoàn kho</button>`}
             </td>
           </tr>
         `;
       }).join('');
     }
 
+    // Khởi tạo trang & tạo sẵn bộ tem vị trí mặc định ở khung xem trước
     renderAll();
+    generateLocationLabels();
   </script>
 </body>
 </html>
