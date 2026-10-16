@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kho Điện Tử Cuộn Giấy - Quy Trình Sản Xuất</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Thư viện quét mã QR bằng Camera -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen p-3 md:p-6">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="bg-white p-5 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">📦 Kho Điện Tử Cuộn Giấy (QR WMS)</h1>
+        <p class="text-sm text-slate-500">Quy trình: Nhập kho lần đầu ➔ Xuất sản xuất (Xóa vị trí) ➔ Hoàn kho vị trí QR mới</p>
+      </div>
+      <button onclick="resetDemoData()" class="px-4 py-2 text-xs bg-slate-200 hover:bg-slate-300 rounded-lg font-semibold transition">
+        Khôi phục dữ liệu mẫu
+      </button>
+    </div>
+
+    <!-- Thống kê trạng thái -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-emerald-500">
+        <p class="text-xs text-slate-500 uppercase font-semibold">Đang trong kho</p>
+        <p id="stat-in-stock" class="text-2xl font-bold mt-1 text-emerald-700">0 cuộn</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-500">
+        <p class="text-xs text-slate-500 uppercase font-semibold">Đang ngoài máy SX</p>
+        <p id="stat-in-prod" class="text-2xl font-bold mt-1 text-amber-600">0 cuộn</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500">
+        <p class="text-xs text-slate-500 uppercase font-semibold">Tổng trọng lượng tồn</p>
+        <p id="stat-weight" class="text-2xl font-bold mt-1">0 kg</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-purple-500">
+        <p class="text-xs text-slate-500 uppercase font-semibold">Vị trí đang có hàng</p>
+        <p id="stat-locs" class="text-2xl font-bold mt-1 text-purple-700">0 / 12</p>
+      </div>
+    </div>
+
+    <!-- Khu vực chính: Sơ đồ kho & Bảng điều khiển 3 tác vụ -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Sơ đồ vị trí (7 cột) -->
+      <div class="lg:col-span-7 bg-white p-5 rounded-xl shadow-sm flex flex-col justify-between">
+        <div>
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold">🗺️ Sơ Đồ Vị Trí Kho</h2>
+            <button onclick="selectFilterLoc('ALL')" class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-semibold hover:bg-blue-100">
+              Xem tất cả (<span id="filter-status-text">Tất cả</span>)
+            </button>
+          </div>
+          <div id="warehouse-map" class="grid grid-cols-3 sm:grid-cols-4 gap-3"></div>
+        </div>
+
+        <!-- Khu vực hiển thị các cuộn đang sản xuất (Đã xóa vị trí) -->
+        <div class="mt-6 pt-4 border-t">
+          <h3 class="text-sm font-bold text-amber-700 mb-2">⚙️ Đang ngoài dây chuyền sản xuất (Chưa có vị trí kho):</h3>
+          <div id="production-zone" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+
+      <!-- Bảng Thao Tác 3 Bước (5 cột) -->
+      <div class="lg:col-span-5 bg-white p-5 rounded-xl shadow-sm">
+        <h2 class="text-lg font-bold mb-3">⚡ Thao Tác Kho (Chọn Tác Vụ)</h2>
+        
+        <!-- Nút chuyển Tab 3 tác vụ -->
+        <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg mb-4 text-xs font-bold text-center">
+          <button onclick="switchTab('INBOUND')" id="tab-INBOUND" class="py-2 rounded-md bg-blue-600 text-white transition">
+            1. Nhập Lần Đầu
+          </button>
+          <button onclick="switchTab('ISSUE')" id="tab-ISSUE" class="py-2 rounded-md text-slate-600 hover:bg-slate-200 transition">
+            2. Xuất Sản Xuất
+          </button>
+          <button onclick="switchTab('RETURN')" id="tab-RETURN" class="py-2 rounded-md text-slate-600 hover:bg-slate-200 transition">
+            3. Hoàn Kho (QR)
+          </button>
+        </div>
+
+        <!-- Khung Camera Quét QR (Dùng chung cho cả 3 tab) -->
+        <div id="qr-scanner-box" class="hidden mb-4 p-3 bg-slate-900 rounded-lg text-white">
+          <div class="flex justify-between items-center mb-2">
+            <span id="qr-scan-label" class="text-xs font-semibold text-emerald-400">Đang mở camera quét QR...</span>
+            <button onclick="stopQrScanner()" class="text-xs bg-red-600 px-2 py-1 rounded">Đóng Camera</button>
+          </div>
+          <div id="qr-reader" class="w-full rounded overflow-hidden"></div>
+        </div>
+
+        <!-- FORM 1: NHẬP KHO LẦN ĐẦU -->
+        <form id="form-INBOUND" onsubmit="handleInbound(event)" class="space-y-3">
+          <div class="p-3 bg-blue-50 text-blue-800 rounded-lg text-xs">
+            📌 <b>Tác vụ 1:</b> Nhập cuộn giấy mới về kho và gán vào <b>Vị trí ban đầu</b>.
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">MÃ CUỘN (*)</label>
+            <div class="flex gap-2">
+              <input type="text" id="in-rollId" required placeholder="VD: CG-2026-006" class="w-full px-3 py-2 border rounded-lg text-sm uppercase">
+              <button type="button" onclick="startQrScanner('in-rollId')" class="px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold shrink-0">📷 Quét</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">MÃ VỊ TRÍ (*)</label>
+              <div class="flex gap-1">
+                <select id="in-locId" required class="w-full px-2 py-2 border rounded-lg text-sm"></select>
+                <button type="button" onclick="startQrScanner('in-locId')" class="px-2.5 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold shrink-0">📷</button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">LOẠI GIẤY (*)</label>
+              <input type="text" id="in-type" required placeholder="Kraft, Duplex..." class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">GSM</label>
+              <input type="number" id="in-gsm" required placeholder="125" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">KHỔ (CM)</label>
+              <input type="number" id="in-width" required placeholder="120" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">SỐ KG (*)</label>
+              <input type="number" id="in-weight" required placeholder="850" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+          </div>
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition">
+            ➕ Nhập Kho Lần Đầu
+          </button>
+        </form>
+
+        <!-- FORM 2: XUẤT KHO SẢN XUẤT (XÓA VỊ TRÍ CŨ) -->
+        <form id="form-ISSUE" onsubmit="handleIssue(event)" class="space-y-3 hidden">
+          <div class="p-3 bg-amber-50 text-amber-900 rounded-lg text-xs">
+            📌 <b>Tác vụ 2:</b> Đưa cuộn giấy ra máy chạy. Hệ thống sẽ <b>xóa Mã vị trí cũ</b> để giải phóng ô trong kho.
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">CHỌN HOẶC QUÉT MÃ CUỘN TRONG KHO (*)</label>
+            <div class="flex gap-2">
+              <select id="issue-rollId" required class="w-full px-3 py-2 border rounded-lg text-sm"></select>
+              <button type="button" onclick="startQrScanner('issue-rollId')" class="px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold shrink-0">📷 Quét</button>
+            </div>
+          </div>
+          <button type="submit" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-lg text-sm transition">
+            🚜 Xuất Ra Sản Xuất (Xóa Vị Trí Cũ)
+          </button>
+        </form>
+
+        <!-- FORM 3: NHẬP LẠI KHO SAU SẢN XUẤT (GÁN QR VỊ TRÍ MỚI) -->
+        <form id="form-RETURN" onsubmit="handleReturn(event)" class="space-y-3 hidden">
+          <div class="p-3 bg-emerald-50 text-emerald-900 rounded-lg text-xs">
+            📌 <b>Tác vụ 3:</b> Cuộn giấy chạy xong còn dư ➔ Quét <b>Mã vị trí QR mới</b> và cập nhật trọng lượng còn lại.
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">CUỘN GIẤY ĐANG SẢN XUẤT (*)</label>
+            <div class="flex gap-2">
+              <select id="ret-rollId" required onchange="fillReturnWeight()" class="w-full px-3 py-2 border rounded-lg text-sm"></select>
+              <button type="button" onclick="startQrScanner('ret-rollId')" class="px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold shrink-0">📷 Quét</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">MÃ VỊ TRÍ QR MỚI (*)</label>
+              <div class="flex gap-1">
+                <select id="ret-locId" required class="w-full px-2 py-2 border rounded-lg text-sm"></select>
+                <button type="button" onclick="startQrScanner('ret-locId')" class="px-2.5 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold shrink-0">📷</button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">SỐ KG CÒN LẠI (*)</label>
+              <input type="number" id="ret-weight" required placeholder="VD: 350" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+          </div>
+          <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-sm transition">
+            🔄 Hoàn Kho Vào Vị Trí Mới
+          </button>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- Bảng danh sách & Lịch sử di chuyển -->
+    <div class="bg-white p-5 rounded-xl shadow-sm">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        <h2 class="text-lg font-bold">📋 Danh Sách Cuộn Giấy & Trạng Thái Vị Trí</h2>
+        <input type="text" id="search-input" oninput="renderAll()" placeholder="🔍 Tìm Mã cuộn, Mã vị trí, Loại giấy..." class="w-full sm:w-80 px-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-50 text-slate-600 text-xs uppercase border-b">
+              <th class="p-3">Mã Cuộn</th>
+              <th class="p-3">Vị Trí Hiện Tại</th>
+              <th class="p-3">Loại Giấy & Quy Cách</th>
+              <th class="p-3">Trọng Lượng</th>
+              <th class="p-3">Trạng Thái</th>
+              <th class="p-3">Lịch Sử Vị Trí Gần Nhất</th>
+              <th class="p-3 text-right">Thao Tác Nhanh</th>
+            </tr>
+          </thead>
+          <tbody id="roll-table-body" class="text-sm divide-y"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LOCATIONS = [
+      'A1-01', 'A1-02', 'A1-03', 'A1-04',
+      'B1-01', 'B1-02', 'B1-03', 'B1-04',
+      'C1-01', 'C1-02', 'C1-03', 'C1-04'
+    ];
+
+    const DEFAULT_ROLLS = [
+      { rollId: 'CG-2026-001', locationId: 'A1-01', paperType: 'Kraft Vàng', gsm: 125, widthCm: 120, weightKg: 850, status: 'Nguyên cuộn', lastNote: 'Nhập mới vào A1-01' },
+      { rollId: 'CG-2026-002', locationId: 'A1-02', paperType: 'Duplex Trắng', gsm: 250, widthCm: 109, weightKg: 420, status: 'Cuộn dở', lastNote: 'Hoàn kho từ SX về A1-02' },
+      { rollId: 'CG-2026-003', locationId: '', paperType: 'Giấy Sóng Medium', gsm: 115, widthCm: 140, weightKg: 980, status: 'Đang sản xuất', lastNote: 'Đã xuất từ B1-01 (Xóa vị trí)' },
+      { rollId: 'CG-2026-004', locationId: 'C1-01', paperType: 'Ivory', gsm: 300, widthCm: 89, weightKg: 760, status: 'Nguyên cuộn', lastNote: 'Nhập mới vào C1-01' }
+    ];
+
+    let rolls = JSON.parse(localStorage.getItem('wms_paper_v2')) || DEFAULT_ROLLS;
+    let currentFilterLoc = 'ALL';
+    let html5QrCode = null;
+
+    function saveToStorage() {
+      localStorage.setItem('wms_paper_v2', JSON.stringify(rolls));
+    }
+
+    // Chuyển đổi giữa 3 Tab tác vụ
+    function switchTab(tabName) {
+      ['INBOUND', 'ISSUE', 'RETURN'].forEach(t => {
+        document.getElementById(`form-${t}`).classList.add('hidden');
+        const btn = document.getElementById(`tab-${t}`);
+        btn.className = 'py-2 rounded-md text-slate-600 hover:bg-slate-200 transition';
+      });
+
+      document.getElementById(`form-${tabName}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-${tabName}`);
+      if (tabName === 'INBOUND') activeBtn.className = 'py-2 rounded-md bg-blue-600 text-white transition';
+      if (tabName === 'ISSUE') activeBtn.className = 'py-2 rounded-md bg-amber-600 text-white transition';
+      if (tabName === 'RETURN') activeBtn.className = 'py-2 rounded-md bg-emerald-600 text-white transition';
+    }
+
+    // TÁC VỤ 1: Nhập kho lần đầu
+    function handleInbound(e) {
+      e.preventDefault();
+      const rollId = document.getElementById('in-rollId').value.trim().toUpperCase();
+      const locId = document.getElementById('in-locId').value;
+
+      if (rolls.some(r => r.rollId === rollId)) {
+        alert(`Mã cuộn ${rollId} đã tồn tại trong hệ thống!`);
+        return;
+      }
+
+      rolls.unshift({
+        rollId,
+        locationId: locId,
+        paperType: document.getElementById('in-type').value.trim(),
+        gsm: Number(document.getElementById('in-gsm').value),
+        widthCm: Number(document.getElementById('in-width').value),
+        weightKg: Number(document.getElementById('in-weight').value),
+        status: 'Nguyên cuộn',
+        lastNote: `Nhập lần đầu vào ${locId}`
+      });
+
+      saveToStorage();
+      document.getElementById('form-INBOUND').reset();
+      renderAll();
+      alert(`✅ Đã nhập cuộn ${rollId} vào vị trí ${locId}`);
+    }
+
+    // TÁC VỤ 2: Xuất kho sản xuất (Xóa vị trí cũ)
+    function handleIssue(e) {
+      e.preventDefault();
+      const rollId = document.getElementById('issue-rollId').value;
+      if (!rollId) return;
+      issueRollQuick(rollId);
+    }
+
+    function issueRollQuick(rollId) {
+      const r = rolls.find(item => item.rollId === rollId);
+      if (!r) return;
+      const oldLoc = r.locationId;
+      r.locationId = ''; // Xóa vị trí cũ
+      r.status = 'Đang sản xuất';
+      r.lastNote = `Xuất SX (Đã xóa vị trí cũ: ${oldLoc})`;
+      saveToStorage();
+      renderAll();
+    }
+
+    // TÁC VỤ 3: Hoàn kho sau sản xuất (Gán vị trí QR mới)
+    function handleReturn(e) {
+      e.preventDefault();
+      const rollId = document.getElementById('ret-rollId').value;
+      const newLocId = document.getElementById('ret-locId').value;
+      const remainWeight = Number(document.getElementById('ret-weight').value);
+
+      const r = rolls.find(item => item.rollId === rollId);
+      if (!r) return;
+
+      if (remainWeight <= 0) {
+        if (confirm(`Trọng lượng = 0 kg. Xác nhận cuộn ${rollId} đã chạy hết giấy và xóa khỏi kho?`)) {
+          rolls = rolls.filter(item => item.rollId !== rollId);
+        }
+      } else {
+        r.locationId = newLocId;
+        r.weightKg = remainWeight;
+        r.status = 'Cuộn dở';
+        r.lastNote = `Hoàn kho sau SX vào QR mới: ${newLocId}`;
+      }
+
+      saveToStorage();
+      renderAll();
+      alert(`🔄 Đã cập nhật cuộn ${rollId} vào vị trí mới ${newLocId}`);
+    }
+
+    // Chuyển nhanh từ bảng sang Tab Hoàn kho
+    function prepareReturnQuick(rollId) {
+      switchTab('RETURN');
+      document.getElementById('ret-rollId').value = rollId;
+      fillReturnWeight();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function fillReturnWeight() {
+      const rollId = document.getElementById('ret-rollId').value;
+      const r = rolls.find(item => item.rollId === rollId);
+      if (r) document.getElementById('ret-weight').value = r.weightKg;
+    }
+
+    function selectFilterLoc(loc) {
+      currentFilterLoc = loc;
+      document.getElementById('filter-status-text').innerText = loc === 'ALL' ? 'Tất cả' : loc;
+      renderAll();
+    }
+
+    function resetDemoData() {
+      if (!confirm('Khôi phục dữ liệu mẫu ban đầu?')) return;
+      rolls = JSON.parse(JSON.stringify(DEFAULT_ROLLS));
+      currentFilterLoc = 'ALL';
+      saveToStorage();
+      renderAll();
+    }
+
+    // Trình quét QR bằng Camera
+    function startQrScanner(targetInputId) {
+      const box = document.getElementById('qr-scanner-box');
+      box.classList.remove('hidden');
+      document.getElementById('qr-scan-label').innerText = `Đang quét mã cho ô: ${targetInputId}`;
+
+      if (html5QrCode) {
+        html5QrCode.stop().catch(() => {});
+      }
+      html5QrCode = new Html5Qrcode("qr-reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (decodedText) => {
+          const code = decodedText.trim().toUpperCase();
+          const el = document.getElementById(targetInputId);
+          if (el) {
+            el.value = code;
+            if (targetInputId === 'ret-rollId') fillReturnWeight();
+          }
+          stopQrScanner();
+        },
+        () => {}
+      ).catch(err => {
+        alert("Không thể mở Camera (Cần chạy qua HTTPS hoặc localhost): " + err);
+        box.classList.add('hidden');
+      });
+    }
+
+    function stopQrScanner() {
+      if (html5QrCode) {
+        html5QrCode.stop().then(() => {
+          document.getElementById('qr-scanner-box').classList.add('hidden');
+        }).catch(() => {});
+      } else {
+        document.getElementById('qr-scanner-box').classList.add('hidden');
+      }
+    }
+
+    function renderAll() {
+      // 1. Cập nhật Dropdown vị trí & danh sách cuộn theo trạng thái
+      const locOptions = LOCATIONS.map(l => `<option value="${l}">${l}</option>`).join('');
+      document.getElementById('in-locId').innerHTML = locOptions;
+      document.getElementById('ret-locId').innerHTML = locOptions;
+
+      const inStockRolls = rolls.filter(r => r.locationId !== '');
+      const inProdRolls = rolls.filter(r => r.locationId === '');
+
+      document.getElementById('issue-rollId').innerHTML = inStockRolls.length
+        ? inStockRolls.map(r => `<option value="${r.rollId}">${r.rollId} (Vị trí: ${r.locationId} - ${r.weightKg}kg)</option>`).join('')
+        : `<option value="">-- Không có cuộn nào trong kho --</option>`;
+
+      document.getElementById('ret-rollId').innerHTML = inProdRolls.length
+        ? inProdRolls.map(r => `<option value="${r.rollId}">${r.rollId} (${r.paperType} - ${r.weightKg}kg)</option>`).join('')
+        : `<option value="">-- Không có cuộn nào đang SX --</option>`;
+      fillReturnWeight();
+
+      // 2. Thống kê
+      document.getElementById('stat-in-stock').innerText = `${inStockRolls.length} cuộn`;
+      document.getElementById('stat-in-prod').innerText = `${inProdRolls.length} cuộn`;
+      const totalWeight = rolls.reduce((s, r) => s + r.weightKg, 0);
+      document.getElementById('stat-weight').innerText = totalWeight.toLocaleString('vi-VN') + ' kg';
+      const occupiedLocs = new Set(inStockRolls.map(r => r.locationId));
+      document.getElementById('stat-locs').innerText = `${occupiedLocs.size} / ${LOCATIONS.length}`;
+
+      // 3. Sơ đồ kho
+      document.getElementById('warehouse-map').innerHTML = LOCATIONS.map(loc => {
+        const rollsHere = inStockRolls.filter(r => r.locationId === loc);
+        const count = rollsHere.length;
+        const isSelected = currentFilterLoc === loc;
+        const bg = count > 0 ? 'bg-emerald-50 border-emerald-400 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-400';
+        const ring = isSelected ? 'ring-2 ring-purple-600' : '';
+        return `
+          <div onclick="selectFilterLoc('${loc}')" class="cursor-pointer border rounded-lg p-3 transition hover:shadow ${bg} ${ring}">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-sm">${loc}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full ${count > 0 ? 'bg-emerald-200 text-emerald-900 font-semibold' : 'bg-slate-200 text-slate-500'}">${count} cuộn</span>
+            </div>
+            <div class="mt-1 text-xs truncate">${rollsHere.map(r => r.rollId).join(', ') || 'Trống'}</div>
+          </div>
+        `;
+      }).join('');
+
+      // 4. Khu vực đang sản xuất (Đã xóa vị trí)
+      const prodZone = document.getElementById('production-zone');
+      prodZone.innerHTML = inProdRolls.length
+        ? inProdRolls.map(r => `
+            <div onclick="prepareReturnQuick('${r.rollId}')" class="cursor-pointer bg-amber-50 border border-amber-300 text-amber-900 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-amber-100">
+              <span class="font-bold">${r.rollId}</span>
+              <span>(${r.weightKg}kg)</span>
+              <span class="text-emerald-700 font-semibold underline">➔ Bấm để Hoàn kho</span>
+            </div>
+          `).join('')
+        : `<span class="text-xs text-slate-400 italic">Hiện không có cuộn nào đang chạy ngoài máy.</span>`;
+
+      // 5. Bảng danh sách
+      const kw = document.getElementById('search-input').value.trim().toLowerCase();
+      const filtered = rolls.filter(r => {
+        const matchLoc = currentFilterLoc === 'ALL' || r.locationId === currentFilterLoc;
+        const matchKw = r.rollId.toLowerCase().includes(kw) || r.locationId.toLowerCase().includes(kw) || r.paperType.toLowerCase().includes(kw);
+        return matchLoc && matchKw;
+      });
+
+      const tbody = document.getElementById('roll-table-body');
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">Không có cuộn giấy nào khớp điều kiện lọc.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(r => {
+        const isProd = r.locationId === '';
+        const badgeClass = r.status === 'Nguyên cuộn'
+          ? 'bg-blue-50 text-blue-700'
+          : (r.status === 'Đang sản xuất' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700');
+
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="p-3 font-bold text-slate-900">${r.rollId}</td>
+            <td class="p-3">
+              ${isProd
+                ? `<span class="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-300 rounded text-xs font-semibold">Ngoài máy SX (Đã xóa vị trí)</span>`
+                : `<span class="px-2.5 py-1 bg-slate-100 border rounded font-bold text-xs text-slate-800">${r.locationId}</span>`}
+            </td>
+            <td class="p-3">${r.paperType} <span class="text-xs text-slate-500">(${r.gsm} GSM • Khổ ${r.widthCm}cm)</span></td>
+            <td class="p-3 font-semibold">${r.weightKg.toLocaleString('vi-VN')} kg</td>
+            <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${badgeClass}">${r.status}</span></td>
+            <td class="p-3 text-xs text-slate-500">${r.lastNote || '-'}</td>
+            <td class="p-3 text-right">
+              ${!isProd
+                ? `<button onclick="issueRollQuick('${r.rollId}')" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-semibold">🚜 Xuất SX</button>`
+                : `<button onclick="prepareReturnQuick('${r.rollId}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold">🔄 Hoàn kho QR mới</button>`}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
